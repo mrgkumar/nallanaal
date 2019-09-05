@@ -4,8 +4,7 @@ from math import floor
 import skyfield.api
 import skyfield
 from skyfield import almanac
-from pytz import timezone
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timezone, timedelta
 import numpy as np
 import dateutil.relativedelta as relativedelta
 import dateutil.rrule as rrule
@@ -312,8 +311,13 @@ class Almanac:
         return ts, planets
 
     def compute(self, in_date: datetime):
-        in_date_jul = swe.julday(in_date.year, in_date.month, in_date.day,
-                                 in_date.hour + in_date.minute / 60 + in_date.second / 3600)
+        in_date = in_date.astimezone(timezone.utc)
+        _, in_date_jul = swe.utc_to_jd(in_date.year, in_date.month, in_date.day, in_date.hour, in_date.minute,
+                                       in_date.second, swe.GREG_CAL)
+        print(in_date_jul)
+
+        # in_date_jul = swe.julday(in_date.year, in_date.month, in_date.day,
+        #                          in_date.hour + in_date.minute / 60 + in_date.second / 3600)
         sun_pos = swe.calc(in_date_jul, swe.SUN, swe.FLG_SIDEREAL)[0]
         moon_pos = swe.calc(in_date_jul, swe.MOON, swe.FLG_SIDEREAL)[0]
         self.tithi, self.pos_deg = self._calc_tithi(sun_pos, moon_pos)
@@ -341,13 +345,18 @@ class Almanac:
         hr = int(floor(hr_float))
         minute = int(floor((hr_float - hr) * 60))
         t = time(hr, minute)
-        dt = datetime(d.year, d.month, d.day, hr, minute)
+        dt = datetime(d.year, d.month, d.day, hr, minute, tzinfo=timezone.utc)
         return dt
 
     def get_next_thiti(self, target: Thithi):
-        low_deg = (int(target)) * 12.
+        low_deg = (int(target - 1)) * 12.
         target_deg = low_deg
-        now = datetime.now().toordinal()
+        now = datetime.now(timezone.utc)
+        self.compute(now)
+        if self.pos_deg < 180 and target_deg < self.pos_deg:
+            guess = now + timedelta(days=14)
+        else:
+            guess = now
 
         def calc(x: float):
             dt = self._get_date_time_from_float(x)
@@ -355,18 +364,19 @@ class Almanac:
             print(f'curr_pos {self.pos_deg} target_deg {target_deg}')
             return np.abs(self.pos_deg - target_deg)
 
-        result = minimize_scalar(calc, bounds=(now, now + 30), tol=1e-8, method='Bounded',
-                                 options={'disp': True})
+        result = minimize_scalar(calc, bounds=(guess.toordinal(), now.toordinal() + 30), method='Bounded',
+                                 options={'disp': False})
 
         dt = self._get_date_time_from_float(result.x)
+
         self.compute(dt)
-        print(dt, self.tithi)
+        print(dt.astimezone(timezone(timedelta(hours=5, minutes=30))), self.tithi, self.pos_deg)
 
 
 a = Almanac()
-a.compute(datetime.now())
+a.compute(datetime.now(timezone.utc))
 print(a.tithi)
-a.get_next_thiti(Thithi.AMMAVASAI)
+a.get_next_thiti(Thithi.SUK_PRATHAMAI)
 a.get_dates_on_day(Varam.TUE, DateRange(date(2019, 9, 1), date(2019, 12, 31)))
 # from flatlib.datetime import Datetime
 # from flatlib.geopos import GeoPos
@@ -391,9 +401,8 @@ swe.set_sid_mode(swe.SIDM_LAHIRI)
 chennai = skyfield.api.Topos('13.0827 N', '80.2707 E')
 t0 = ts.utc(2019, 8, 25)
 t1 = ts.utc(2019, 8, 26)
-ist = timezone('Asia/Kolkata')
 t, y = almanac.find_discrete(t0, t1, almanac.sunrise_sunset(planets, chennai))
-print(t.utc, t.astimezone(ist), y)
+
 now = t[0].tt
 ayanamsa = swe.get_ayanamsa(now)
 
