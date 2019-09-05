@@ -314,7 +314,7 @@ class Almanac:
         in_date = in_date.astimezone(timezone.utc)
         _, in_date_jul = swe.utc_to_jd(in_date.year, in_date.month, in_date.day, in_date.hour, in_date.minute,
                                        in_date.second, swe.GREG_CAL)
-        print(in_date_jul)
+        # print(in_date_jul)
 
         # in_date_jul = swe.julday(in_date.year, in_date.month, in_date.day,
         #                          in_date.hour + in_date.minute / 60 + in_date.second / 3600)
@@ -353,30 +353,37 @@ class Almanac:
         target_deg = low_deg
         now = datetime.now(timezone.utc)
         self.compute(now)
-        if self.pos_deg < 180 and target_deg < self.pos_deg:
-            guess = now + timedelta(days=14)
-        else:
-            guess = now
+        first_target = False
+        if target_deg < self.pos_deg:
+            orig_target = target_deg
+            target_deg = 360
+            first_target = True
 
         def calc(x: float):
             dt = self._get_date_time_from_float(x)
             self.compute(dt)
-            print(f'curr_pos {self.pos_deg} target_deg {target_deg}')
+            # print(f'curr_pos {self.pos_deg} target_deg {target_deg}')
             return np.abs(self.pos_deg - target_deg)
 
-        result = minimize_scalar(calc, bounds=(guess.toordinal(), now.toordinal() + 30), method='Bounded',
+        if first_target:
+            result = minimize_scalar(calc, bounds=(now.toordinal(), now.toordinal() + 30), method='Bounded',
+                                     options={'disp': False})
+            now = self._get_date_time_from_float(result.x)
+            target_deg = orig_target
+        result = minimize_scalar(calc, bounds=(now.toordinal(), now.toordinal() + 30), method='Bounded',
                                  options={'disp': False})
 
         dt = self._get_date_time_from_float(result.x)
 
         self.compute(dt)
-        print(dt.astimezone(timezone(timedelta(hours=5, minutes=30))), self.tithi, self.pos_deg)
+        print(dt, dt.astimezone(timezone(timedelta(hours=5, minutes=30))), self.tithi, self.pos_deg,
+              int(self.tithi) * 12 - self.pos_deg, 'left')
 
 
 a = Almanac()
 a.compute(datetime.now(timezone.utc))
 print(a.tithi)
-a.get_next_thiti(Thithi.SUK_PRATHAMAI)
+a.get_next_thiti(Thithi.SUK_PANCHAMI)
 a.get_dates_on_day(Varam.TUE, DateRange(date(2019, 9, 1), date(2019, 12, 31)))
 # from flatlib.datetime import Datetime
 # from flatlib.geopos import GeoPos
