@@ -82,8 +82,10 @@ class VARAM(IntEnum):
                  }
         return table[day]
 
+
 class Varam:
-    _dict = {int(v): v for v in VARAM}
+    dict = {int(v): v for v in VARAM}
+
 
 class RASI(IntEnum):
     __order__ = "MESHAM RISHABAM MITHUNAM KADAKAM SIMHAM KANNI THULAM VRICHIKAM DHANUSH MAKARAM KUMBAM MEENAM"
@@ -183,7 +185,12 @@ class Month:
     _span_deg = 30.0
 
     def __init__(self, sun_pos: Angle):
-        self.name = Month._list[int(floor(sun_pos.degrees / Month._span_deg))]
+        if type(sun_pos.degrees) is np.float64:
+            self.name = Month._list[int(floor(sun_pos.degrees / Month._span_deg))]
+        elif type(sun_pos.degrees) is np.ndarray:
+            self.name = np.array([Month._list[int(floor(d / Month._span_deg))] for d in sun_pos.degrees], MONTHS)
+        else:
+            ValueError("Unknown type for sun_pos")
 
 
 class AMRUTHATHI_YOGAMS(IntEnum):

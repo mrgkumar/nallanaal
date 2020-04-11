@@ -14,6 +14,7 @@ from scipy.optimize import minimize_scalar, fmin
 from params import THITHI, VARAM, DateRange, RASI, MONTHS, NAKSHATRAS, Varam
 from params import Thithi, Nakshaktram, Month
 from params import tara_palan_table
+from scipy import interpolate
 
 tithi_list = Thithi._list
 rasi_list = [r for r in RASI]
@@ -29,7 +30,6 @@ class Almanac:
         self.longitude = longitude
         self.topo = Topos(latitude=latitude, longitude=longitude)
         self.time_scale, self.planets = Almanac.init_skyfield()
-        self.vara = None
         self.yoga = None
         self.karanam = None
         self.earth = self.planets['earth']
@@ -41,7 +41,9 @@ class Almanac:
         self.sun_pos = None
         self.thithi = None
         self.nakshaktra = None
-        self.day = None
+        self.vara = None
+        self.sun_rise_cache = dict()
+        self.tzone = self.time.utc_datetime().astimezone().tzinfo
 
         self.compute_almanac()
         Almanac._compute_tara_palan_dict()
@@ -67,13 +69,14 @@ class Almanac:
         self.sun_pos = self._compute_sun_pos(self.time)
         self.thithi = self._compute_tithi_on(self.time)
         self.nakshaktra = self._compute_nakshaktram(self.time)
-        if len(self.time.shape) > 0:
-            func = lambda x: Varam._dict[x.astimezone().weekday()]
-            vfunc = np.vectorize(func, otypes=[VARAM])
-            self.day = vfunc(self.time.utc_datetime())
-        else:
-            self.day = Varam._dict[self.time.utc_datetime().weekday()]
-        self.time.utc_datetime()
+        self.vara = self._get_varam(self.time)
+        # if len(self.time.shape) > 0:
+        #     func = lambda x: Varam.dict[x.astimezone().weekday()]
+        #     vfunc = np.vectorize(func, otypes=[VARAM])
+        #     self.vara = vfunc(self.time.utc_datetime())
+        # else:
+        #     self.vara = Varam.dict[self.time.utc_datetime().weekday()]
+        # self.time.utc_datetime()
 
     @staticmethod
     def init_skyfield() -> Tuple[Timescale, SpiceKernel]:
@@ -223,4 +226,70 @@ class Almanac:
 
     def _compute_sun_rise_sun_set(self, start: Time, stop: Time):
         times, rise_set = find_discrete(start, stop, sunrise_sunset(self.planets, self.topo))
+        for t in times[rise_set]:
+            cur_date = t.utc_datetime().date()
+            if cur_date not in self.sun_rise_cache.keys():
+                self.sun_rise_cache[cur_date] = t
         return times[rise_set], times[~rise_set]
+
+    def _get_sun_rise_on_day(self, time: Time) -> Time:
+        vfunc = np.vectorize(lambda x: x.date(), otypes=[date])
+        if len(time.shape) > 0:
+            dates = vfunc(time.utc_datetime())
+        else:
+            dates = vfunc([time.utc_datetime()])
+        output = []
+        for curr_date in dates:
+            if curr_date not in self.sun_rise_cache.keys():
+                self._compute_sun_rise_sun_set(self.time_scale.utc(curr_date.year, curr_date.month, curr_date.day),
+                                               self.time_scale.utc(curr_date.year, curr_date.month, curr_date.day + 1))
+            output.append(self.sun_rise_cache[curr_date].tt)
+        return Time(self.time_scale, output)
+
+    def _get_varam(self, time: Time):
+        sun_rise = self._get_sun_rise_on_day(time)
+
+        def foo(a, b, c):
+            day = c.weekday()
+            if a < b:
+                if VARAM.MON == Varam.dict[day]:
+                    return VARAM.SUN
+                else:
+                    return Varam.dict[day - 1]
+            else:
+                return Varam.dict[day]
+
+        if len(time.shape) > 0:
+            return np.array([foo(a, b, c) for a, b, c in zip(time.tt, sun_rise.tt, time.astimezone(self.tzone))],
+                            dtype=VARAM)
+        return foo(time.tt, sun_rise.tt, time.astimezone(self.tzone))
+
+    def _get_month_start_end(self, start: Time, stop: Time = None) -> Tuple[Time, Month]:
+        # input parameters validation
+        if stop is None:
+            stop = Time(self.time_scale, start.tt + 366.)
+        else:
+            if stop.tt < start.tt:
+                raise ValueError("Stop time should be greater than start time")
+        # first pass compute sun_pos every 6 hours for 1 year
+        tframe = Time(self.time_scale, np.linspace(start.tt, stop.tt, int((stop.tt - start.tt) * 24 / 6)))
+        sun_pos = self._compute_sun_pos(tframe)
+        # convert degrees in increasing order
+        mesha_crossing_idxs = [x for x in np.argwhere(np.diff(sun_pos.degrees) < 0.).flatten()]
+        degrees = sun_pos.degrees
+        for n, _ in enumerate(mesha_crossing_idxs):
+            if n + 1 < len(mesha_crossing_idxs):
+                degrees[mesha_crossing_idxs[n] + 1: mesha_crossing_idxs[n + 1]] += 360. * (n + 1)
+            else:
+                degrees[mesha_crossing_idxs[n] + 1:] += 360. * (n + 1)
+        # model as spline interpolation problem
+        y = tframe.tt
+        x = degrees
+        # get time for these crossings
+        x_new = np.arange(np.ceil(x.min() / 30), np.ceil(x.max() / 30) + 1) * 30
+        interp_model = interpolate.splrep(x, y, s=0)
+
+        y_new = interpolate.splev(x_new, interp_model, der=0)
+        months = Month(Angle(degrees=x_new % 360))
+        times = Time(self.time_scale, y_new)
+        return times, months
