@@ -1,6 +1,6 @@
 dateutils==0.6.8
 jplephem==2.14
-numpy==1.18.2
+numpy==1.22.0
 pyswisseph==2.8.0.post0
 python-dateutil==2.8.1
 pytz==2019.3
