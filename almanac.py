@@ -25,7 +25,7 @@ month_list = [m for m in MONTHS]
 class Almanac:
     tara_palan_dict = dict()
 
-    def __init__(self, latitude='12.9399348 N', longitude='77.7337622 E'):
+    def __init__(self, latitude='12.9715987 N', longitude='77.5945627 E'):
         self.latitude = latitude
         self.longitude = longitude
         self.topo = Topos(latitude=latitude, longitude=longitude)
@@ -81,7 +81,7 @@ class Almanac:
     @staticmethod
     def init_skyfield() -> Tuple[Timescale, SpiceKernel]:
         ts = skyfield.api.load.timescale()
-        planets = skyfield.api.load('de438s.bsp')  # ('de421.bsp')
+        planets = skyfield.api.load('de441.bsp') #'de438s.bsp')  # ('de421.bsp')
         return ts, planets
 
     def compute(self, in_date: datetime):
@@ -226,9 +226,10 @@ class Almanac:
 
     def _compute_sun_rise_sun_set(self, start: Time, stop: Time):
         times, rise_set = find_discrete(start, stop, sunrise_sunset(self.planets, self.topo))
+        rise_set = rise_set.astype(bool)
         for t in times[rise_set]:
             cur_date = t.utc_datetime().date()
-            if cur_date not in self.sun_rise_cache.keys():
+            if cur_date not in self.sun_rise_cache:
                 self.sun_rise_cache[cur_date] = t
         return times[rise_set], times[~rise_set]
 
@@ -244,7 +245,7 @@ class Almanac:
                 self._compute_sun_rise_sun_set(self.time_scale.utc(curr_date.year, curr_date.month, curr_date.day),
                                                self.time_scale.utc(curr_date.year, curr_date.month, curr_date.day + 1))
             output.append(self.sun_rise_cache[curr_date].tt)
-        return Time(self.time_scale, output)
+        return Time(self.time_scale, np.fromiter(output,float))
 
     def _get_varam(self, time: Time):
         sun_rise = self._get_sun_rise_on_day(time)
@@ -252,15 +253,15 @@ class Almanac:
         def foo(a, b, c):
             day = c.weekday()
             if a < b:
-                if VARAM.MON == Varam.dict[day]:
-                    return VARAM.SUN
-                else:
-                    return Varam.dict[day - 1]
+                # if VARAM.MON == Varam.dict[day]:
+                #     return VARAM.SUN
+                # else:
+                return Varam.dict[day - 1]
             else:
                 return Varam.dict[day]
 
         if len(time.shape) > 0:
-            return np.array([foo(a, b, c) for a, b, c in zip(time.tt, sun_rise.tt, time.astimezone(self.tzone))],
+            return np.array([foo(a, b, c) for a, b, c in zip(time.tt, sun_rise.tt, time.utc_datetime())], #time.astimezone(self.tzone))],
                             dtype=VARAM)
         return foo(time.tt, sun_rise.tt, time.astimezone(self.tzone))
 

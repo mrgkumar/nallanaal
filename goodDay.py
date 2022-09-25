@@ -4,8 +4,8 @@ import skyfield.api
 import skyfield
 from datetime import datetime, date, timezone
 import numpy as np
-
-from almanac import Almanac
+import almanac
+from almanac import Almanac, find_discrete
 from params import NAKSHATRAS, VARAM, RASI, THITHI, MONTHS, DateRange
 
 tithi_list = [t for t in THITHI]
@@ -54,7 +54,9 @@ print(a.tithi)
 for t in tithi_list:
     print(f'requesting for {t.__str__()}')
     a.get_next_thiti(t)
-a.get_dates_on_day(VARAM.TUE, DateRange(date(2020, 4, 1), date(2020, 4, 30)))
+
+
+# a.get_dates_on_day(VARAM.TUE, DateRange(date(2021, 9, 1), date(2025, 12, 31)))
 # from flatlib.datetime import Datetime
 # from flatlib.geopos import GeoPos
 # import flatlib.const as const
@@ -76,9 +78,9 @@ swe.set_sid_mode(swe.SIDM_LAHIRI)
 # sun = chart.getObject(const.SUN)
 # moon = chart.getObject(const.MOON)
 chennai = skyfield.api.Topos('13.0827 N', '80.2707 E')
-t0 = ts.utc(2019, 4, 14)
-t1 = ts.utc(2020, 4, 14)
-t, y = almanac.find_discrete(t0, t1, almanac.sunrise_sunset(planets, chennai))
+t0 = ts.utc(2021, 9, 1)
+t1 = ts.utc(2025, 12, 31)
+t, y = find_discrete(t0, t1, almanac.sunrise_sunset(planets, chennai))
 
 now = t[0].tt
 ayanamsa = swe.get_ayanamsa(now)
@@ -94,7 +96,7 @@ rahu = swe.calc(now, swe.MEAN_NODE, swe.FLG_SIDEREAL)
 ketu = swe.calc(now, swe.TRUE_NODE, swe.FLG_SIDEREAL)
 print('ayanamsa', ayanamsa, deg_min_sec(ayanamsa))
 
-print('sun', deg_min_sec(sun[0]), int(floor(sun[0] / 30)) + 1)
-print('moon', deg_min_sec(moon[0]), int(floor(moon[0] / 30)) + 1)
-print('mars', deg_min_sec(mars[0]), int(floor(mars[0] / 30)) + 1)
-print('mercury', deg_min_sec(mercury[0]), int(floor(mercury[0] / 30)) + 1)
+# print('sun', deg_min_sec(sun[0]), int(floor(sun[0] / 30)) + 1)
+# print('moon', deg_min_sec(moon[0]), int(floor(moon[0] / 30)) + 1)
+# print('mars', deg_min_sec(mars[0]), int(floor(mars[0] / 30)) + 1)
+# print('mercury', deg_min_sec(mercury[0]), int(floor(mercury[0] / 30)) + 1)

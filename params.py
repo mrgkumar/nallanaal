@@ -83,8 +83,12 @@ class VARAM(IntEnum):
         return table[day]
 
 
+
+
 class Varam:
     dict = {int(v): v for v in VARAM}
+    dict[-1] = VARAM.SUN
+
 
 
 class RASI(IntEnum):
@@ -359,3 +363,8 @@ good_thithi_list = [THITHI.SUK_DASAMI, THITHI.SUK_YEKADASI, THITHI.SUK_DVADASI, 
 avoid_thitis_list = [THITHI.AMMAVASAI, THITHI.POURNAMI, THITHI.SUK_ASHTAMI, THITHI.KRI_ASHTAMI, THITHI.SUK_NAVAMI,
                      THITHI.KRI_NAVAMI, THITHI.SUK_CHATHURDASI, THITHI.KRI_CHATHURDASI, THITHI.SUK_PRATHAMAI,
                      THITHI.KRI_PRATHAMAI]
+
+# yugadhi_days = [(MONTHS.MESHAM,THITHI.SUK_THRITHIYAI,'Kritha'),
+#                 (MONTHS.KANNI, THITHI.KRI_THRIYODASI, 'Dwapara'),
+#                 (MONTHS.THULAM, THITHI.SUK_NAVAMI, 'Thretha'),
+#                 (MONTHS.)]
